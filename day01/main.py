@@ -9,6 +9,21 @@ from transformers import AutoTokenizer
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 
+class AgentBaseError(Exception):
+    """所有Agent错误的基类，方便统一捕获"""
+    pass
+
+
+class TokenLimitExceededError(AgentBaseError):
+    """Token超限异常"""
+
+    def __init__(self, current_tokens: int, limit: int, message: str = "Token数量超过模型限制"):
+        self.current_tokens = current_tokens
+        self.limit = limit
+        self.message = f"{message}: 当前 {current_tokens}, 限制 {limit}"
+        super().__init__(self.message)
+
+
 class AdvancedLLM:
     def __init__(self, api_key: str, model: str = "qwen3.6-plus"):
         # 接入阿里云的 OpenAI 兼容接口
@@ -75,8 +90,13 @@ class AdvancedLLM:
         5. 在流输出结束后，把完整的 assistant 回答加入 history
         """
         current_message = {"role": "user", "content": user_message}
-        self.history.append(current_message)
+        current_tokens = self._count_tokens([current_message])
+        limit = 4096  # 假设是这个限制
+        if current_tokens > limit:
+            # 别 print！直接抛出！
+            raise TokenLimitExceededError(current_tokens=current_tokens, limit=limit)
 
+        self.history.append(current_message)
         self._trim_history()
 
         stream = await self.client.chat.completions.create(
@@ -101,8 +121,14 @@ async def main():
     # 写一个 while True 循环，在终端里接收你的输入，并流式打印大模型的输出。
     while True:
         user_input = input("\n请开始输入：").strip()
-        async for chunk in llm.async_chat_stream(user_input):
-            print(chunk, end="", flush=True)
+        try:
+            async for chunk in llm.async_chat_stream(user_input):
+                print(chunk, end="", flush=True)
+        except TokenLimitExceededError as e:
+            print(f"致命错误：{e.message}")
+        except Exception as e:
+            print(f"其他未知错误: {e}")
+            break
 
 
 if __name__ == "__main__":
