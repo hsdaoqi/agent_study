@@ -12,6 +12,7 @@ class ToolRegistry:
         print("\n[INIT] >>> ToolRegistry 唯一实例已初始化 <<<")
         self.tools: Dict[str, Callable] = {}
         self.tools_schema: List[Dict] = []
+        self.models: Dict[str, Any] = {}
 
     def register(self, func: Callable):
         """核心装饰器： 利用Pydantic 自动生成 Schema"""
@@ -27,15 +28,14 @@ class ToolRegistry:
             fields[param_name] = (annotation, default)
 
         PydanticModel = create_model(f"{name}_input", **fields)
-        schema_json = PydanticModel.model_json_schema()
-
+        self.models[name] = PydanticModel
         self.tools[name] = func
         self.tools_schema.append({
             "type": "function",
             "function": {
                 "name": name,
                 "description": doc.strip(),
-                "parameters": schema_json
+                "parameters": PydanticModel.model_json_schema()
             }
         })
         return func
