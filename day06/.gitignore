@@ -1,0 +1,7 @@
+chroma_db/
+
+checkpoints.sqlite
+fineLLM.pdf
+
+__pycache__/
+.idea/
